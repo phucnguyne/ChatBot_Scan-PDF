@@ -10,5 +10,7 @@ gpt4all
 faiss-cpu
 openai
 huggingface_hub
-rank_bm25
 sentencepiece
+pdf2image
+paddlepaddle
+paddleocr

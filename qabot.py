@@ -1,11 +1,14 @@
 import os
 import pickle
 import json
+import re
+import math
+from datetime import datetime
 from typing import List, Optional
 
 from langchain_community.llms import CTransformers
-from langchain_classic.chains import RetrievalQA
-from langchain_classic.prompts import PromptTemplate
+from langchain.chains import RetrievalQA
+from langchain.prompts import PromptTemplate
 from langchain_community.embeddings import GPT4AllEmbeddings
 from langchain_community.vectorstores import FAISS
 
@@ -24,6 +27,197 @@ model_file = "models/vinallama-7b-chat_q5_0.gguf"
 vector_db_path = "vectorstores/db_faiss"
 bm25_index_path = os.path.join(vector_db_path, "bm25_index.pkl")
 SESSION_MEMORY = os.path.join("vectorstores", "session_memory.jsonl")
+
+
+def _normalize_metadata_filter_key(key: str) -> str:
+    key = key.strip().lower()
+    if key in {"file", "path"}:
+        return "source"
+    return key
+
+
+def _normalize_metadata_filter_value(key: str, value: str):
+    value = value.strip().strip("\"'")
+    if key == "source":
+        return os.path.basename(value)
+    if key == "page" and value.isdigit():
+        return int(value)
+    return value
+
+
+def _extract_query_directives(question: str):
+    cleaned_parts = []
+    metadata_filter = {}
+    for token in question.split():
+        if ":" not in token:
+            cleaned_parts.append(token)
+            continue
+
+        key, value = token.split(":", 1)
+        norm_key = _normalize_metadata_filter_key(key)
+        if norm_key in {"source", "page"} and value:
+            metadata_filter[norm_key] = _normalize_metadata_filter_value(norm_key, value)
+            continue
+
+        cleaned_parts.append(token)
+
+    cleaned_question = " ".join(cleaned_parts).strip()
+    return cleaned_question, metadata_filter
+
+
+def _metadata_matches_filter(metadata: dict, metadata_filter: dict) -> bool:
+    if not metadata_filter:
+        return True
+
+    md = metadata or {}
+    for key, expected_value in metadata_filter.items():
+        actual_value = md.get(key)
+        if key == "source" and isinstance(actual_value, str):
+            actual_value = os.path.basename(actual_value)
+        if key == "page" and isinstance(actual_value, str) and actual_value.isdigit():
+            actual_value = int(actual_value)
+        if actual_value != expected_value:
+            return False
+    return True
+
+
+def _bm25_score_query(query_tokens: List[str], bm25_index: dict) -> List[float]:
+    doc_token_freqs = bm25_index.get("doc_token_freqs") or []
+    doc_lengths = bm25_index.get("doc_lengths") or []
+    avgdl = bm25_index.get("avgdl") or 0.0
+    idf = bm25_index.get("idf") or {}
+    k1 = bm25_index.get("k1", 1.5)
+    b = bm25_index.get("b", 0.75)
+
+    scores = [0.0 for _ in doc_token_freqs]
+    if not query_tokens or not doc_token_freqs:
+        return scores
+
+    for token in query_tokens:
+        token_idf = idf.get(token)
+        if token_idf is None:
+            continue
+        for index, token_freqs in enumerate(doc_token_freqs):
+            frequency = token_freqs.get(token, 0)
+            if not frequency:
+                continue
+            doc_length = doc_lengths[index] if index < len(doc_lengths) else 0
+            denominator = frequency + k1 * (1 - b + b * (doc_length / avgdl)) if avgdl else frequency + k1
+            scores[index] += token_idf * (frequency * (k1 + 1)) / denominator
+
+    return scores
+
+
+def _extract_topic(question: str) -> str:
+    text = question.strip()
+    if not text:
+        return ""
+
+    lowered = text.lower()
+    for prefix in ("môn ", "bài ", "câu ", "chủ đề ", "phần "):
+        if lowered.startswith(prefix):
+            remainder = text[len(prefix):].strip()
+            if not remainder:
+                return ""
+            words = remainder.split()
+            if not words:
+                return ""
+            if words[0].lower() in {"đó", "này", "ấy", "kia", "nữa"}:
+                return ""
+            return " ".join(words[:5]).strip(" .,!?:;\"'")
+
+    match = re.match(r"^([A-Za-zÀ-ỹ0-9_-]{2,})(?:\s+(.+))?$", text)
+    if match:
+        head = match.group(1).strip()
+        tail = (match.group(2) or "").split()
+        if tail and tail[0].lower() not in {"đó", "này", "ấy", "kia", "nữa"}:
+            return " ".join([head] + tail[:4]).strip(" .,!?:;\"'")
+
+    return ""
+
+
+def _load_session_entries(limit: int = 20) -> List[dict]:
+    if not os.path.exists(SESSION_MEMORY):
+        return []
+
+    entries: List[dict] = []
+    try:
+        with open(SESSION_MEMORY, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    item = json.loads(line)
+                except Exception:
+                    continue
+                if isinstance(item, dict) and item.get("summary"):
+                    entries.append(item)
+    except Exception:
+        return []
+
+    return entries[-limit:]
+
+
+def _load_session_context(n: int = 5) -> str:
+    entries = _load_session_entries(n)
+    if not entries:
+        return ""
+
+    lines = []
+    for entry in entries:
+        summary = (entry.get("summary") or "").strip()
+        if summary:
+            lines.append(summary)
+
+    return "\n".join(lines)
+
+
+def _needs_session_context(question: str) -> bool:
+    q = question.lower()
+    return any(
+        marker in q
+        for marker in (
+            "môn đó",
+            "bài đó",
+            "câu đó",
+            "cái đó",
+            "nó",
+            "đó",
+            "tiếp theo",
+            "lúc nãy",
+            "vừa rồi",
+            "câu trước",
+        )
+    )
+
+
+def _build_session_context(question: str) -> str:
+    entries = _load_session_entries()
+    if not entries:
+        return ""
+
+    if _needs_session_context(question):
+        relevant_entries = entries[-1:]
+    else:
+        relevant_entries = entries[-3:]
+
+    latest_entry = entries[-1]
+    summaries = [entry.get("summary", "").strip() for entry in relevant_entries if entry.get("summary")]
+    if not summaries:
+        return ""
+
+    context_lines = []
+    topic = (latest_entry.get("topic") or "").strip()
+    if topic:
+        context_lines.append(f"Chủ đề gần nhất: {topic}")
+
+    last_question = (latest_entry.get("question") or "").strip()
+    if last_question:
+        context_lines.append(f"Câu hỏi gần nhất: {last_question}")
+
+    context_lines.extend(f"- {summary}" for summary in summaries)
+    return "Ngữ cảnh hội thoại trước đó:\n" + "\n".join(context_lines)
 
 # Load LLM
 def load_llm(model_file):
@@ -68,7 +262,7 @@ class CustomRetriever:
             try:
                 with open(bm25_path, "rb") as fh:
                     data = pickle.load(fh)
-                    self.bm25 = data.get("bm25")
+                    self.bm25 = data
                     self.bm25_metadatas = data.get("metadatas")
                     self.bm25_docs = data.get("docs")
             except Exception:
@@ -84,34 +278,29 @@ class CustomRetriever:
     def _filter_by_metadata(self, docs: List, filter: dict):
         if not filter:
             return docs
-        out = []
-        for d in docs:
-            md = getattr(d, "metadata", {}) or {}
-            ok = True
-            for k, v in filter.items():
-                if md.get(k) != v:
-                    ok = False
-                    break
-            if ok:
-                out.append(d)
-        return out
+        return [d for d in docs if _metadata_matches_filter(getattr(d, "metadata", {}) or {}, filter)]
 
     def get_relevant_documents(self, query: str, **kwargs):
         # accept optional filter in kwargs
-        metadata_filter = kwargs.get("filter") or kwargs.get("metadata_filter")
+        cleaned_query, parsed_filter = _extract_query_directives(query)
+        metadata_filter = kwargs.get("filter") or kwargs.get("metadata_filter") or parsed_filter
+        search_query = cleaned_query or query
 
         # 1) FAISS search
         try:
-            faiss_docs = self.db.similarity_search(query, k=self.fetch_k)
+            faiss_docs = self.db.similarity_search(search_query, k=self.fetch_k)
         except Exception:
             faiss_docs = []
 
         # 2) optional BM25 candidates
         bm25_candidates = []
         if self.bm25 is not None and self.bm25_docs is not None:
-            tokenized = query.split()
+            tokenized = search_query.split()
             try:
-                scores = self.bm25.get_scores(tokenized)
+                if hasattr(self.bm25, "get_scores"):
+                    scores = self.bm25.get_scores(tokenized)
+                else:
+                    scores = _bm25_score_query(tokenized, self.bm25)
                 top_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[: self.fetch_k]
                 for idx in top_idx:
                     bm25_candidates.append({"text": self.bm25_docs[idx], "metadata": self.bm25_metadatas[idx]})
@@ -145,7 +334,7 @@ class CustomRetriever:
 
         # rerank if reranker available
         if self.reranker is not None and merged:
-            pairs = [(query, d.page_content) for d in merged]
+            pairs = [(search_query, d.page_content) for d in merged]
             try:
                 scores = self.reranker.predict(pairs)
                 scored = list(zip(merged, scores))
@@ -200,8 +389,8 @@ llm_chain = RetrievalQA.from_chain_type(
 
 def _save_session_summary(question: str, answer: str):
     # Lightweight heuristic summary: try to detect noun after 'Môn' else store short Q/A
-    summary = None
     q = question.strip()
+    topic = _extract_topic(q)
     if q.lower().startswith("môn "):
         # take until punctuation
         subj = q[4:].split(" ")[:5]
@@ -212,7 +401,19 @@ def _save_session_summary(question: str, answer: str):
 
     os.makedirs(os.path.dirname(SESSION_MEMORY), exist_ok=True)
     with open(SESSION_MEMORY, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps({"summary": summary}) + "\n")
+        fh.write(
+            json.dumps(
+                {
+                    "summary": summary,
+                    "topic": topic,
+                    "question": q,
+                    "answer": answer[:500],
+                    "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
 
 
 # Chay cai chain
@@ -221,27 +422,23 @@ while True:
     if question.lower() == "exit":
         print("Thoát chương trình.")
         break
-    # allow simple metadata filter syntax: e.g. "source:database.pdf"
-    meta_filter = None
-    if "source:" in question or "page:" in question:
-        parts = [p.strip() for p in question.split() if ":" in p]
-        for p in parts:
-            k, v = p.split(":", 1)
-            if k and v:
-                if meta_filter is None:
-                    meta_filter = {}
-                meta_filter[k] = v
+    session_context = _build_session_context(question)
+    resolved_question, _ = _extract_query_directives(question)
+    if session_context:
+        resolved_question = f"{resolved_question}\n\n{session_context}"
 
-    invoke_kwargs = {"query": question}
-    if meta_filter:
-        invoke_kwargs["filter"] = meta_filter
+    invoke_kwargs = {"query": resolved_question}
 
     response = llm_chain.invoke(invoke_kwargs)
     answer = response.get("result") or response.get("answer") or ""
-    print("\nTrả lời:", answer)
 
     # print citation sources if available
     src_docs = response.get("source_documents") or []
+    if not src_docs:
+        answer = "Không tìm thấy thông tin trong tài liệu"
+
+    print("\nTrả lời:", answer)
+
     seen_src = set()
     if src_docs:
         print("\nNguồn:")

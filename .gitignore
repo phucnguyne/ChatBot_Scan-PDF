@@ -10,4 +10,6 @@ venv/
 data/
 models/
 vectorstores/
+tests/
+scripts/
 .cache/

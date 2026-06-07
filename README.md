@@ -83,6 +83,12 @@ python qabot.py
 
 Type questions in Vietnamese; enter `exit` to quit.
 
+8. Run the test suite:
+
+```bash
+python -m unittest discover -s tests
+```
+
 ---
 
 ## How it works (overview)
@@ -90,6 +96,20 @@ Type questions in Vietnamese; enter `exit` to quit.
 - Prepare: `prepare_model/*` downloads the embedding model and the local LLM in GGUF format into `models/`.
 - Indexing: `Embedding/prepare_vector_db.py` reads PDFs from `data/`, splits text into chunks, computes embeddings, and stores them in `vectorstores/db_faiss/`.
 - Query: `qabot.py` takes a user question, finds relevant chunks in FAISS, and passes context + question to the local LLM to generate an answer.
+
+---
+
+## Session memory format
+
+`vectorstores/session_memory.jsonl` is append-only JSONL. Each line is a JSON object with these fields:
+
+- `summary`: short one-line recap of the turn.
+- `topic`: best-effort topic extracted from the question.
+- `question`: original user question.
+- `answer`: truncated answer text stored for follow-up context.
+- `created_at`: UTC timestamp in ISO-8601 format.
+
+`qabot.py` reads the most recent entries from this file to resolve follow-up questions like “Môn đó” or “câu đó”.
 
 ---
 
