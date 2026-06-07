@@ -1,0 +1,14 @@
+ctransformers
+transformers
+langchain
+langchain-community
+langchain-core
+torch
+pypdf
+sentence-transformers
+gpt4all
+faiss-cpu
+openai
+huggingface_hub
+rank_bm25
+sentencepiece
