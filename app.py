@@ -41,7 +41,7 @@ try:
     from langchain_community.embeddings import GPT4AllEmbeddings
     from langchain_classic.chains import RetrievalQA
     from langchain_core.prompts import PromptTemplate
-    from langchain_community.llms import CTransformers
+    from langchain_ollama import OllamaLLM
     _langchain_ok = True
 except Exception as _langchain_err:
     _langchain_ok = False
@@ -224,27 +224,13 @@ def _build_vectorstore(pages: list[dict], source_name: str):
             _vectorstore = None
             return
 
-    # 3) Load LLM CTransformers (vinallama)
+    # 3) Load LLM qua Ollama (không cần file local)
     _qa_chain = None
-    llm_path = _Path(LLM_MODEL)
-    if not llm_path.exists():
-        print(f"[QA] Không tìm thấy LLM model: {LLM_MODEL} — chỉ dùng similarity search")
-        return
-
     try:
-        llm = CTransformers(
-            model=str(llm_path),
-            model_type="llama",
-            config={
-                "max_new_tokens": 256,   # giảm từ 1024 → 256 (nhanh ~4x)
-                "temperature": 0.3,      # tăng nhẹ để tránh greedy search chậm
-                "top_p": 0.9,
-                "top_k": 40,
-                "repetition_penalty": 1.1,
-                "context_length": 2048,  # giới hạn context window
-                "batch_size": 1,
-                "threads": 4,            # dùng 4 CPU threads
-            },
+        llm = OllamaLLM(
+            model="qwen2.5:1.5b",
+            temperature=0.3,
+            num_predict=256,
         )
         prompt = PromptTemplate(
             template=PROMPT_TEMPLATE,
@@ -257,9 +243,9 @@ def _build_vectorstore(pages: list[dict], source_name: str):
             return_source_documents=True,
             chain_type_kwargs={"prompt": prompt},
         )
-        print("[QA] LLM chain sẵn sàng")
+        print("[QA] Ollama LLM chain sẵn sàng (qwen2.5:1.5b)")
     except Exception as e:
-        print(f"[QA] Load LLM thất bại: {e} — chỉ dùng similarity search")
+        print(f"[QA] Ollama thất bại: {e} — kiểm tra ollama serve có chạy không")
         _qa_chain = None
 
 
@@ -386,5 +372,5 @@ if __name__ == "__main__":
         server_port=7860,
         share=False,
         inbrowser=True,
-        theme=gr.themes.Soft(),
+        theme=gr.themes.Monochrome(),
     )
