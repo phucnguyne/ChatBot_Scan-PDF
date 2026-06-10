@@ -194,6 +194,17 @@ def _save_chat_turn(user_msg: str, bot_msg: str):
     with open(CHAT_HISTORY_PATH, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
+def _is_clean_entry(item: dict) -> bool:
+    """Reject entries where the bot field looks like a raw session-memory dump."""
+    bot = item.get("bot", "")
+    # Old corrupted format: bot text starts with "Q: ... | A: ..."
+    if re.match(r"^Q:.{1,120}\| A:", bot):
+        return False
+    # Also reject if it contains the context marker header
+    if _SESSION_CTX_MARKER in bot:
+        return False
+    return True
+
 def _load_chat_history(limit: int = 200) -> list:
     """Load the last *limit* turns from disk and return as Gradio-ready list."""
     if not os.path.exists(CHAT_HISTORY_PATH):
@@ -208,7 +219,8 @@ def _load_chat_history(limit: int = 200) -> list:
                 try:
                     item = json.loads(line)
                     if isinstance(item, dict) and "user" in item and "bot" in item:
-                        entries.append(item)
+                        if _is_clean_entry(item):
+                            entries.append(item)
                 except Exception:
                     pass
     except Exception:
@@ -264,22 +276,41 @@ def _load_session_entries(limit=20) -> List[dict]:
         pass
     return entries[-limit:]
 
+# Keywords that mean the user is explicitly referring back to a PREVIOUS turn.
+# ONLY in these cases do we inject session context into the query.
+_BACK_REF_TOKENS = {
+    "môn đó", "bài đó", "câu đó", "cái đó", "tiếp theo",
+    "lúc nãy", "vừa rồi", "câu trước", "ý đó", "phần đó",
+    "vấn đề đó", "điều đó", "nó", "đó",
+}
+
 def _needs_session_context(q: str) -> bool:
-    return any(m in q.lower() for m in
-        ("môn đó","bài đó","câu đó","cái đó","nó","đó","tiếp theo","lúc nãy","vừa rồi","câu trước"))
+    """Return True ONLY when the user is clearly referencing a previous turn."""
+    ql = q.lower()
+    return any(tok in ql for tok in _BACK_REF_TOKENS)
 
 def _build_session_context(question: str) -> str:
+    """
+    Inject previous-turn context ONLY when the question is a back-reference
+    (e.g. "câu đó là gì", "tiếp theo"). Fresh questions get NO injected context
+    so the LLM is forced to answer from the PDF, not from memory.
+    """
+    if not _needs_session_context(question):
+        return ""
     entries = _load_session_entries()
-    if not entries: return ""
-    relevant = entries[-1:] if _needs_session_context(question) else entries[-3:]
-    latest   = entries[-1]
-    summaries = [e.get("summary","").strip() for e in relevant if e.get("summary")]
-    if not summaries: return ""
-    lines = []
-    if latest.get("topic"): lines.append(f"Chủ đề gần nhất: {latest['topic']}")
-    if latest.get("question"): lines.append(f"Câu hỏi gần nhất: {latest['question']}")
-    lines.extend(f"- {s}" for s in summaries)
-    return "Ngữ cảnh hội thoại trước đó:\n" + "\n".join(lines)
+    if not entries:
+        return ""
+    latest = entries[-1]
+    prev_q = latest.get("question", "").strip()
+    prev_a = latest.get("answer",   "").strip()
+    if not prev_q:
+        return ""
+    # Format as a compact hint — NOT raw "Q: | A:" which LLMs tend to repeat.
+    hint = f"[Gợi ý ngữ cảnh — không lặp lại]\nCâu hỏi trước: {prev_q}"
+    if prev_a:
+        # Only include a short excerpt of the previous answer
+        hint += f"\nTóm tắt câu trả lời trước: {prev_a[:200].rstrip()}"
+    return hint
 
 def _save_session_summary(question: str, answer: str):
     q = question.strip()
@@ -310,18 +341,56 @@ def _norm_val(k: str, v: str):
     if k == "page" and v.isdigit(): return int(v)
     return v
 
+# Vietnamese / natural-language patterns that indicate a file or page filter.
+# Examples:
+#   "câu 1 ở file QuanLyGiaoVu.pdf"   -> source=QuanLyGiaoVu.pdf
+#   "trong file abc.pdf trang 5"       -> source=abc.pdf, page=5
+#   "trang 3 file xyz.pdf"             -> source=xyz.pdf, page=3
+_FILE_PATTERNS = re.compile(
+    r"(?:(?:ở|trong|của|at|in|from)\s+)?(?:file|tập tin|tài liệu|document)\s+([\w\-. ()]+\.pdf)",
+    re.IGNORECASE,
+)
+_PAGE_PATTERNS = re.compile(
+    r"(?:trang|page|tr\.?|pg\.?)\s*(\d+)",
+    re.IGNORECASE,
+)
+
 def _extract_query_directives(question: str):
-    parts, filt = [], {}
+    """
+    Parse BOTH colon-style directives (source:foo.pdf page:3)
+    AND natural-language references (ở file QuanLyGiaoVu.pdf trang 2).
+    Returns (cleaned_query, filter_dict).
+    """
+    filt = {}
+
+    # ── 1. colon-style: source:foo.pdf page:3 ────────────────────────────
+    parts = []
     for token in question.split():
         if ":" not in token:
-            parts.append(token); continue
+            parts.append(token)
+            continue
         k, v = token.split(":", 1)
         nk = _norm_key(k)
-        if nk in {"source","page"} and v:
+        if nk in {"source", "page"} and v:
             filt[nk] = _norm_val(nk, v)
         else:
             parts.append(token)
-    return " ".join(parts).strip(), filt
+    cleaned = " ".join(parts).strip()
+
+    # ── 2. natural language: "ở file X.pdf" / "trang N" ─────────────────
+    m_file = _FILE_PATTERNS.search(cleaned)
+    if m_file and "source" not in filt:
+        fname = os.path.basename(m_file.group(1).strip())
+        filt["source"] = fname
+        cleaned = cleaned[:m_file.start()] + cleaned[m_file.end():]
+
+    m_page = _PAGE_PATTERNS.search(cleaned)
+    if m_page and "page" not in filt:
+        filt["page"] = int(m_page.group(1))
+        cleaned = cleaned[:m_page.start()] + cleaned[m_page.end():]
+
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+    return cleaned, filt
 
 def _meta_matches(metadata: dict, filt: dict) -> bool:
     if not filt: return True
@@ -594,6 +663,28 @@ def _loaded_files_table(files: List[str]) -> str:
 # TAB 2 — CHAT Q&A
 # ═════════════════════════════════════════════════════════════════════════════
 
+_SESSION_CTX_MARKER = "Ngữ cảnh hội thoại trước đó:"
+
+def _clean_reply_for_storage(reply: str) -> str:
+    """
+    Remove any session-context block the LLM may have echoed back.
+    Also remove the injected context header so stored messages stay clean.
+    """
+    lines = reply.splitlines()
+    clean = []
+    skip = False
+    for line in lines:
+        if _SESSION_CTX_MARKER in line:
+            skip = True          # drop this line and everything until a blank
+            continue
+        if skip and line.strip() == "":
+            skip = False         # blank line ends the context block
+            continue
+        if skip:
+            continue
+        clean.append(line)
+    return "\n".join(clean).strip()
+
 def chat(message: str, history: list):
     if not message.strip():
         return history, ""
@@ -606,14 +697,32 @@ def chat(message: str, history: list):
                  "/ No document loaded. Upload PDFs in Tab 1 first.")
         return _append_pair(h, message, reply), ""
 
+    # Only inject history context when the user is explicitly referencing a
+    # previous turn ("câu đó", "tiếp theo"...).  For fresh questions we let
+    # the retriever find the answer from the PDF directly.
     session_ctx = _build_session_context(message)
-    resolved_q, _ = _extract_query_directives(message)
+    resolved_q, msg_filt = _extract_query_directives(message)
+
     if session_ctx:
-        resolved_q = f"{resolved_q}\n\n{session_ctx}"
+        # Back-reference: pull the last 2 turns from live Gradio history
+        # (more reliable than the file-based summaries).
+        if _GR6:
+            recent = [(e["content"] if isinstance(e, dict) else str(e))
+                      for e in (h[-4:] if len(h) >= 4 else h)]
+        else:
+            recent = [f"User: {u}\nBot: {b}" for u, b in (h[-2:] if len(h) >= 2 else h)]
+        history_snippet = "\n".join(str(r) for r in recent if r)
+        if history_snippet:
+            resolved_q = f"{resolved_q}\n\nLịch sử hội thoại gần nhất:\n{history_snippet}"
+        else:
+            resolved_q = f"{resolved_q}\n\n{session_ctx}"
 
     if _qa_chain is not None:
         try:
-            resp     = _qa_chain.invoke({"query": resolved_q})
+            invoke_kwargs = {"query": resolved_q}
+            if msg_filt:
+                invoke_kwargs["filter"] = msg_filt
+            resp     = _qa_chain.invoke(invoke_kwargs)
             reply    = resp.get("result") or resp.get("answer") or "Không có kết quả."
             src_docs = resp.get("source_documents") or []
             if src_docs:
@@ -633,7 +742,10 @@ def chat(message: str, history: list):
     else:
         # fallback: similarity search
         try:
-            docs  = _vectorstore.similarity_search(resolved_q, k=4)
+            _ss_kwargs = {"k": 4}
+            if msg_filt.get("source"):
+                _ss_kwargs["filter"] = {"source": msg_filt["source"]}
+            docs  = _vectorstore.similarity_search(resolved_q, **_ss_kwargs)
             if not docs:
                 reply = "Không tìm thấy đoạn nào liên quan."
             else:
@@ -650,9 +762,10 @@ def chat(message: str, history: list):
     except Exception:
         pass
 
-    # Persist this turn so it survives page refresh / server restart
+    # Persist this turn so it survives page refresh / server restart.
+    # Strip any session-context header that may have been echoed by the LLM.
     try:
-        _save_chat_turn(message, reply)
+        _save_chat_turn(message, _clean_reply_for_storage(reply))
     except Exception:
         pass
 
