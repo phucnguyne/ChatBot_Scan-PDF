@@ -1,0 +1,26 @@
+# Core
+gradio>=6.0
+langchain>=1.3
+langchain-community>=0.4
+langchain-core>=1.4
+langchain-text-splitters>=1.1
+langchain-ollama>=1.1
+ollama>=0.6
+
+# Vector DB & retrieval
+faiss-cpu>=1.14
+rank-bm25>=0.2
+sentence-transformers>=5.5
+
+# Embeddings
+gpt4all>=2.8
+
+# PDF processing
+pypdf>=6.0
+pdf2image>=1.17
+paddleocr>=3.6
+paddlepaddle>=3.3
+
+# Utilities
+python-dotenv>=1.0
+Pillow>=12.0

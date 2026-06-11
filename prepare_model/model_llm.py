@@ -1,11 +1,25 @@
-import os
-from huggingface_hub import hf_hub_download
+import subprocess, sys, os
 
-os.makedirs("models", exist_ok=True)
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b")
 
-hf_hub_download(
-    repo_id="vilm/vinallama-7b-chat-GGUF",
-    filename="vinallama-7b-chat_q5_0.gguf",
-    local_dir="models"
-)
-print("Tải xong!")
+def check_ollama_running() -> bool:
+    try:
+        import urllib.request
+        urllib.request.urlopen("http://localhost:11434", timeout=3)
+        return True
+    except Exception:
+        return False
+
+def pull_model(model: str) -> None:
+    print(f"Pulling Ollama model: {model} ...")
+    result = subprocess.run(["ollama", "pull", model], capture_output=False)
+    if result.returncode != 0:
+        print(f"❌ ollama pull thất bại. Hãy chạy thủ công: ollama pull {model}")
+    else:
+        print(f"✅ Model {model} sẵn sàng.")
+
+if __name__ == "__main__":
+    if not check_ollama_running():
+        print("⚠️  Ollama chưa chạy. Khởi động bằng: ollama serve")
+        sys.exit(1)
+    pull_model(OLLAMA_MODEL)
