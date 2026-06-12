@@ -41,3 +41,6 @@ models/
 temp/
 tmp/
 *.tmp
+
+project_flow_explained.md
+implementation_plan.md
