@@ -290,4 +290,5 @@ feat: add local Paperwise PDF chat UI
 
 ## License
 
-Chưa khai báo license. Nếu public repository, hãy thêm một license rõ ràng trước khi phát hành.
+Phát hành theo [MIT License](LICENSE). Bạn có thể sử dụng, sao chép, chỉnh sửa
+và phân phối project theo các điều khoản trong file license.
