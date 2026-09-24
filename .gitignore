@@ -10,6 +10,7 @@ env/
 
 # Project data and models
 data/
+documents/
 tests/
 scripts/
 .cache/
@@ -35,6 +36,7 @@ Thumbs.db
 htmlcov/
 
 vectorstores/
+workspaces/
 
 models/
 
