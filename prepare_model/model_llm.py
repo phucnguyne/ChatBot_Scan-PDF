@@ -1,6 +1,6 @@
 import subprocess, sys, os
 
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")
 
 def check_ollama_running() -> bool:
     try:

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local PDF Intelligence</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">✦</span><span>Paperwise</span></div>
+      <button class="new-chat" id="new-chat"><span>＋</span> Cuộc trò chuyện mới</button>
+      <div class="sidebar-label">Lịch sử trò chuyện</div>
+      <div class="chat-list" id="chat-list"><div class="muted">Đang tải...</div></div>
+      <div class="sidebar-label">Không gian tài liệu</div>
+      <div class="document-list" id="document-list"><div class="muted">Đang tải...</div></div>
+      <div class="import-card">
+        <input id="file-input" type="file" accept="application/pdf,.pdf" hidden>
+        <button class="import-button" id="import-button" type="button">＋ Import PDF</button>
+        <div class="import-name" id="import-name">Chưa chọn tài liệu</div>
+        <div class="range-grid">
+          <label>Từ trang<input id="start-page" type="number" min="1" value="1"></label>
+          <label>Số trang<input id="page-count" type="number" min="0" value="10"></label>
+        </div>
+        <label class="all-pages"><input id="all-pages" type="checkbox"> Build toàn bộ tài liệu</label>
+        <button class="build-button" id="build-button" type="button" disabled>Build chỉ mục</button>
+        <button class="clear-documents" id="clear-documents" type="button">Xóa toàn bộ tài liệu</button>
+        <div class="build-status" id="build-status">Import PDF để bắt đầu</div>
+        <div class="build-estimate" id="build-estimate">Ước tính: chọn số trang để xem</div>
+        <div class="progress-track"><div id="build-progress"></div></div>
+      </div>
+      <div class="sidebar-spacer"></div>
+      <div class="system-card">
+        <div class="status-row"><span class="status-dot" id="status-dot"></span><span id="status-text">Đang kiểm tra</span></div>
+        <div class="system-meta" id="system-meta">Local only</div>
+      </div>
+      <button class="clear-button" id="clear-history">Xóa dữ liệu chat hiện tại</button>
+    </aside>
+
+    <main class="chat-area">
+      <header class="topbar">
+        <div><div class="eyebrow">PDF knowledge workspace</div><h1>Hỏi đáp tài liệu</h1></div>
+        <div class="model-pill"><span class="pulse"></span><span id="model-name">Ollama local</span></div>
+      </header>
+
+      <section class="conversation" id="conversation">
+        <div class="welcome" id="welcome">
+          <div class="welcome-icon">✦</div>
+          <h2>Đọc tài liệu cùng bạn.</h2>
+          <p>Đặt câu hỏi bằng tiếng Việt. Mọi câu trả lời đều bám theo nội dung PDF đã lập chỉ mục.</p>
+          <div class="prompt-grid">
+            <button class="prompt-card" data-question="Tài liệu này nói về chủ đề gì?">Tài liệu này nói về chủ đề gì?<span>→</span></button>
+            <button class="prompt-card" data-question="Tóm tắt những ý chính của tài liệu">Tóm tắt những ý chính<span>→</span></button>
+            <button class="prompt-card" data-question="Cho tôi biết các từ vựng quan trọng">Các từ vựng quan trọng là gì?<span>→</span></button>
+          </div>
+        </div>
+      </section>
+
+      <footer class="composer-wrap">
+        <form class="composer" id="chat-form">
+          <textarea id="question" rows="1" placeholder="Build index trước khi đặt câu hỏi..." autocomplete="off" disabled></textarea>
+          <button class="send-button" id="send-button" type="submit" aria-label="Gửi câu hỏi" disabled>↑</button>
+        </form>
+        <div class="composer-note">Câu trả lời được tạo cục bộ · Enter để gửi · Shift + Enter để xuống dòng</div>
+      </footer>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

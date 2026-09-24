@@ -7,6 +7,8 @@ def build_citation_string(source_docs) -> str:
         md    = getattr(d, "metadata", {}) or {}
         src   = os.path.basename(md.get("source") or "?")
         page  = md.get("page")
+        if isinstance(page, int) and page == 0:
+            page += 1
         label = f"{src} tr.{page}" if page is not None else src
         if label not in seen:
             sources.append(label)

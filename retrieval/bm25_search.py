@@ -10,8 +10,13 @@ def _load():
             _bm25_index = pickle.load(f)
     return _bm25_index
 
-def bm25_search(query: str, top_k: int = 4):
-    idx = _load()
+def bm25_search(query: str, top_k: int = 4, index_path: str = BM25_INDEX_PATH):
+    global _bm25_index
+    if index_path != BM25_INDEX_PATH:
+        with open(index_path, "rb") as f:
+            idx = pickle.load(f)
+    else:
+        idx = _load()
     tokens = query.split()
     scores = []
     N, avgdl = len(idx["docs"]), idx["avgdl"]

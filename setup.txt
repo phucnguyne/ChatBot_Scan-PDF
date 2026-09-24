@@ -1,0 +1,22 @@
+# Cài đặt dependency cho QA Bot PDF
+# Windows PowerShell, chạy trong thư mục project:
+#   .\venv\Scripts\Activate.ps1
+#   python -m pip install -r setup.txt
+-r requirements.txt
+
+# Ollama là chương trình riêng, cài từ https://ollama.com/download/windows
+# Sau khi cài, chạy:
+#   ollama serve
+#   ollama pull qwen2.5:3b
+
+# Tài liệu scan lớn: có thể thử trước 10 trang để kiểm tra OCR:
+#   $env:OCR_MAX_PAGES=10; python build_index.py
+# Bỏ giới hạn để index toàn bộ tài liệu:
+#   Remove-Item Env:OCR_MAX_PAGES
+
+# Web UI local:
+#   .\venv\Scripts\Activate.ps1
+#   python app.py
+# Mở: http://127.0.0.1:8000
+# Có thể import PDF và chọn trang build trực tiếp trên giao diện.
+# File upload được lưu ở documents/ (đổi bằng biến môi trường PDF_DATA_PATH).

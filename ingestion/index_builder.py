@@ -58,16 +58,16 @@ def build_bm25(chunks) -> dict:
     }
 
 
-def save_bm25(index: dict):
-    os.makedirs(os.path.dirname(BM25_INDEX_PATH), exist_ok=True)
-    with open(BM25_INDEX_PATH, "wb") as f:
+def save_bm25(index: dict, index_path: str = BM25_INDEX_PATH):
+    os.makedirs(os.path.dirname(index_path), exist_ok=True)
+    with open(index_path, "wb") as f:
         pickle.dump(index, f)
-    print(f"✅ BM25 saved → {BM25_INDEX_PATH}")
+    print(f"✅ BM25 saved → {index_path}")
 
 
 # ── FAISS ─────────────────────────────────────────────────────────────────────
 
-def build_faiss(chunks):
+def build_faiss(chunks, vector_db_path: str = VECTOR_DB_PATH):
     if not chunks:
         raise ValueError("Không có chunk nào để build FAISS.")
 
@@ -85,7 +85,7 @@ def build_faiss(chunks):
     print(f"✅ Embedding OK — dim={len(test_vec)}")
 
     db = FAISS.from_documents(chunks, emb)
-    os.makedirs(VECTOR_DB_PATH, exist_ok=True)
-    db.save_local(VECTOR_DB_PATH)
-    print(f"✅ FAISS saved → {VECTOR_DB_PATH}  ({len(chunks)} chunks)")
-    return db
+    os.makedirs(vector_db_path, exist_ok=True)
+    db.save_local(vector_db_path)
+    print(f"✅ FAISS saved → {vector_db_path}  ({len(chunks)} chunks)")
+    return db
