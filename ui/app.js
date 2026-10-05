@@ -15,9 +15,9 @@ let buildTimer = null;
 function updateEstimate() {
   const all = allPages.checked;
   const count = Number(document.getElementById('page-count').value) || 0;
-  if (all) { buildEstimate.textContent = 'Ước tính: toàn bộ tài liệu, thời gian phụ thuộc số trang'; return; }
+  if (all) { buildEstimate.textContent = 'Estimate: entire document; time depends on page count'; return; }
   const seconds = Math.max(8, count * 2.2 + 12);
-  buildEstimate.textContent = `Ước tính: khoảng ${Math.ceil(seconds / 60) ? `${Math.ceil(seconds / 60)} phút` : `${Math.ceil(seconds)} giây`} cho ${count} trang scan`;
+  buildEstimate.textContent = `Estimate: about ${Math.ceil(seconds / 60) ? `${Math.ceil(seconds / 60)} min` : `${Math.ceil(seconds)} sec`} for ${count} scanned pages`;
 }
 
 function addMessage(role, text, citation = '') {
@@ -44,11 +44,11 @@ function addMessage(role, text, citation = '') {
 }
 
 function addTyping() {
-  return addMessage('assistant', 'Đang đọc tài liệu...');
+  return addMessage('assistant', 'Reading your documents...');
 }
 
 function resetConversation() {
-  conversation.innerHTML = '<div class="welcome" id="welcome"><div class="welcome-icon">✦</div><h2>Đọc tài liệu cùng bạn.</h2><p>Đặt câu hỏi bằng tiếng Việt. Mọi câu trả lời đều bám theo nội dung PDF đã lập chỉ mục.</p></div>';
+  conversation.innerHTML = '<div class="welcome" id="welcome"><div class="welcome-icon">✦</div><h2>Explore your documents.</h2><p>Ask questions in your preferred language. Answers are grounded in the indexed PDF content.</p></div>';
 }
 
 async function loadHistory() {
@@ -73,11 +73,11 @@ async function sendQuestion(question) {
     });
     const data = await response.json();
     typing.remove();
-    if (!response.ok) addMessage('assistant', data.error || 'Có lỗi xảy ra.', '');
+    if (!response.ok) addMessage('assistant', data.error || 'Something went wrong.', '');
     else addMessage('assistant', data.answer, data.citation);
   } catch (error) {
     typing.remove();
-    addMessage('assistant', 'Không thể kết nối tới server local.', 'Kiểm tra terminal đang chạy web_server.py.');
+    addMessage('assistant', 'Could not connect to the local server.', 'Check that web_server.py is running in the terminal.');
   } finally { sendButton.disabled = false; input.focus(); }
 }
 
@@ -100,19 +100,19 @@ fileInput.addEventListener('change', async () => {
   selectedFile = fileInput.files[0];
   if (!selectedFile) return;
   if (!selectedFile.name.toLowerCase().endsWith('.pdf')) {
-    buildStatus.textContent = 'Chỉ hỗ trợ file PDF';
+    buildStatus.textContent = 'Only PDF files are supported';
     selectedFile = null;
     return;
   }
-  buildStatus.textContent = 'Đang import tài liệu...';
+  buildStatus.textContent = 'Importing document...';
   const formData = new FormData();
   formData.append('file', selectedFile);
   const response = await fetch('/api/upload', {method: 'POST', body: formData});
   const data = await response.json();
-  if (!response.ok) { buildStatus.textContent = data.error || 'Import thất bại'; return; }
+  if (!response.ok) { buildStatus.textContent = data.error || 'Import failed'; return; }
   document.getElementById('import-name').textContent = data.filename;
   buildButton.disabled = false;
-  buildStatus.textContent = 'Đã import. Chọn phạm vi trang rồi Build.';
+  buildStatus.textContent = 'Imported. Choose a page range, then build the index.';
   loadStatus();
 });
 
@@ -130,17 +130,17 @@ buildButton.addEventListener('click', async () => {
     body: JSON.stringify({start_page: startPage, page_count: pageCount})
   });
   const data = await response.json();
-  if (!response.ok) { buildStatus.textContent = data.error || 'Không thể build'; return; }
+  if (!response.ok) { buildStatus.textContent = data.error || 'Could not build the index'; return; }
   buildButton.disabled = true;
   input.disabled = true;
   sendButton.disabled = true;
-  buildStatus.textContent = `Đang build ${pageCount ? `${pageCount} trang` : 'toàn bộ tài liệu'}...`;
+  buildStatus.textContent = `Building ${pageCount ? `${pageCount} pages` : 'the entire document'}...`;
   clearInterval(buildTimer);
   buildTimer = setInterval(loadStatus, 1000);
   loadStatus();
 });
 document.getElementById('clear-documents').addEventListener('click', async () => {
-  if (!confirm('Xóa toàn bộ tài liệu và index của cuộc trò chuyện này?')) return;
+  if (!confirm('Delete all documents and the index for this chat?')) return;
   await fetch('/api/clear-documents', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
   resetConversation(); loadStatus();
 });
@@ -151,45 +151,45 @@ async function loadStatus() {
     const data = await response.json();
     const dot = document.getElementById('status-dot');
     dot.className = `status-dot ${data.ready ? 'ready' : 'error'}`;
-    document.getElementById('status-text').textContent = data.ready ? 'Index sẵn sàng' : 'Chưa có index';
+    document.getElementById('status-text').textContent = data.ready ? 'Index ready' : 'No index';
     const build = data.build || {};
-    document.getElementById('system-meta').textContent = `${data.pdf_count} PDF · ${data.history_count / 2 | 0} lượt chat`;
+    document.getElementById('system-meta').textContent = `${data.pdf_count} PDF · ${data.history_count / 2 | 0} chat turns`;
     document.getElementById('model-name').textContent = data.model;
     buildProgress.style.width = `${build.progress || 0}%`;
     if (build.running) {
-      buildStatus.textContent = build.message || 'Đang build index...';
+      buildStatus.textContent = build.message || 'Building index...';
       buildButton.disabled = true;
     } else if (build.phase === 'done') {
-      buildStatus.textContent = build.message || 'Build hoàn tất. Có thể đặt câu hỏi.';
+      buildStatus.textContent = build.message || 'Build complete. You can now ask questions.';
       buildButton.disabled = false;
     } else if (build.phase === 'error') {
-      buildStatus.textContent = `Build lỗi: ${build.message}`;
+      buildStatus.textContent = `Build failed: ${build.message}`;
       buildButton.disabled = false;
     }
     buildButton.disabled = build.running || !data.pdf_count;
     const ready = Boolean(data.ready);
     input.disabled = !ready;
     sendButton.disabled = !ready;
-    input.placeholder = ready ? 'Hỏi bất cứ điều gì về tài liệu...' : 'Build index trước khi đặt câu hỏi...';
+    input.placeholder = ready ? 'Ask anything about your documents...' : 'Build the index before asking a question...';
     if (!build.running && buildTimer) { clearInterval(buildTimer); buildTimer = null; }
     const list = document.getElementById('document-list');
-    list.innerHTML = data.pdfs.length ? data.pdfs.map(name => `<div class="doc-item active"><span class="doc-icon">▧</span><span class="doc-name" title="${name}">${name}</span><button class="delete-doc" data-file="${encodeURIComponent(name)}" title="Xóa tài liệu">×</button></div>`).join('') : '<div class="muted">Chưa có PDF</div>';
+    list.innerHTML = data.pdfs.length ? data.pdfs.map(name => `<div class="doc-item active"><span class="doc-icon">▧</span><span class="doc-name" title="${name}">${name}</span><button class="delete-doc" data-file="${encodeURIComponent(name)}" title="Delete document">×</button></div>`).join('') : '<div class="muted">No PDFs</div>';
     document.querySelectorAll('.delete-doc').forEach(button => button.addEventListener('click', async () => {
-      if (!confirm(`Xóa tài liệu ${decodeURIComponent(button.dataset.file)}?`)) return;
+      if (!confirm(`Delete document ${decodeURIComponent(button.dataset.file)}?`)) return;
       await fetch('/api/delete-document', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({filename:decodeURIComponent(button.dataset.file)})});
       loadStatus();
     }));
   } catch (_) {
-    document.getElementById('status-text').textContent = 'Server chưa sẵn sàng';
+    document.getElementById('status-text').textContent = 'Server is not ready';
   }
 }
 async function loadChats() {
   const response = await fetch('/api/chats');
   const data = await response.json();
   const list = document.getElementById('chat-list');
-  list.innerHTML = data.chats.map(chat => `<div class="chat-row"><button class="chat-item ${chat.id === data.active ? 'active' : ''}" data-chat="${chat.id}">${chat.title}</button>${chat.id === data.active ? '' : `<button class="delete-chat" data-chat="${chat.id}" title="Xóa cuộc trò chuyện">×</button>`}</div>`).join('');
+  list.innerHTML = data.chats.map(chat => `<div class="chat-row"><button class="chat-item ${chat.id === data.active ? 'active' : ''}" data-chat="${chat.id}">${chat.title}</button>${chat.id === data.active ? '' : `<button class="delete-chat" data-chat="${chat.id}" title="Delete chat">×</button>`}</div>`).join('');
   document.querySelectorAll('.chat-item').forEach(button => button.addEventListener('click', async () => { await fetch('/api/switch-chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({chat_id:button.dataset.chat})}); loadHistory(); loadStatus(); loadChats(); }));
-  document.querySelectorAll('.delete-chat').forEach(button => button.addEventListener('click', async () => { if (!confirm('Xóa cuộc trò chuyện này?')) return; await fetch('/api/delete-chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({chat_id:button.dataset.chat})}); loadChats(); }));
+  document.querySelectorAll('.delete-chat').forEach(button => button.addEventListener('click', async () => { if (!confirm('Delete this chat?')) return; await fetch('/api/delete-chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({chat_id:button.dataset.chat})}); loadChats(); }));
 }
 async function initializeApp() {
   // A fresh page is a fresh draft; saved chats are opened explicitly from the sidebar.
@@ -200,7 +200,7 @@ async function initializeApp() {
       await fetch('/api/new-chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
     }
   } catch (_) {
-    document.getElementById('status-text').textContent = 'Server chưa sẵn sàng';
+    document.getElementById('status-text').textContent = 'Server is not ready';
   }
   resetConversation();
   await loadStatus();

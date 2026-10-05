@@ -22,6 +22,8 @@ from memory.history_manager import clear_history, load_history, save_turn
 from rag.citation import build_citation_string
 from retrieval.metadata_filter import extract_directives
 
+LONG_ANSWER_TERMS = re.compile(r"\b(?:all|complete|entire|detailed|explain|list)\b", re.IGNORECASE)
+
 
 @dataclass
 class SearchResult:
@@ -36,41 +38,42 @@ def format_context(results: list[SearchResult]) -> str:
     for result in results:
         source = os.path.basename(str(result.metadata.get("source", "unknown")))
         page = result.metadata.get("page")
-        location = f"{source} - trang {page}" if page is not None else source
-        sections.append(f"[Nguồn: {location}]\n{result.content.strip()}")
+        location = f"{source} - page {page}" if page is not None else source
+        sections.append(f"[Source: {location}]\n{result.content.strip()}")
     return "\n\n".join(sections)
 
 
 def build_prompt(question: str, context: str, history: list[dict[str, str]] | None = None) -> str:
-    """Build a grounded Vietnamese prompt with a small amount of chat context."""
-    long_answer = bool(re.search(r"\b(toàn bộ|đầy đủ|tất cả|chi tiết|trình bày)\b", question.lower()))
+    """Build a grounded prompt with a small amount of chat context."""
+    long_answer = bool(LONG_ANSWER_TERMS.search(question))
     recent_history = [] if long_answer else (history[-4:] if history else [])
     history_text = "\n".join(
         f"{item['role']}: {item['content']}" for item in recent_history
     )
-    return f"""Bạn là trợ lý hỏi đáp tài liệu PDF bằng tiếng Việt.
-Chỉ trả lời dựa trên CONTEXT. Nếu CONTEXT không đủ, trả lời đúng câu:
-\"Không tìm thấy thông tin trong tài liệu.\"
-Không được bịa hoặc suy đoán. Khi trả lời, hãy trích dẫn nguồn theo dạng
-[Nguồn: tên_file.pdf - trang N]. Với yêu cầu trình bày toàn bộ, phải đi lần lượt
-qua tất cả mục con có trong CONTEXT; không dừng ở mục đầu tiên.
+    return f"""You are a PDF question-answering assistant.
+Answer only using the CONTEXT. If the CONTEXT does not contain the answer, say:
+\"The document does not contain this information.\"
+Do not make up facts or guess. Cite sources using the format
+[Source: filename.pdf - page N] when possible. For requests asking for a complete
+answer, cover every relevant subsection in the CONTEXT; do not stop at the first one.
+Answer in the same language as the user's question.
 
-LỊCH SỬ GẦN ĐÂY:
-{history_text or '(không có)'}
+RECENT CHAT HISTORY:
+{history_text or '(none)'}
 
 CONTEXT:
 {context}
 
-CÂU HỎI:
+QUESTION:
 {question}
 
-TRẢ LỜI:"""
+ANSWER:"""
 
 
 def append_missing_sections(answer: str, question: str, results: list[SearchResult]) -> str:
     """Prevent a small model from silently omitting numbered sub-sections."""
-    match = re.search(r"\bcâu\s+(\d+)\b", question.lower())
-    if not match or not re.search(r"\b(toàn bộ|đầy đủ|tất cả|chi tiết|trình bày)\b", question.lower()):
+    match = re.search(r"\b(?:question|section)\s+(\d+)\b", question, re.IGNORECASE)
+    if not match or not LONG_ANSWER_TERMS.search(question):
         return answer
     section = match.group(1)
     source_text = "\n".join(result.content for result in results)
@@ -115,8 +118,8 @@ class QABot:
             return
         if not Path(self.vector_db_path).exists():
             raise FileNotFoundError(
-                f"Chưa có vector database tại {VECTOR_DB_PATH}. "
-                "Hãy import PDF vào documents/ rồi chạy Build chỉ mục trên web UI."
+                f"No vector database found at {VECTOR_DB_PATH}. "
+                "Import a PDF into documents/ and build the index in the web UI."
             )
         from ingestion.index_builder import SentenceTransformerEmbedding
         from langchain_community.vectorstores import FAISS
@@ -130,7 +133,7 @@ class QABot:
 
     def retrieve(self, question: str, filters: dict[str, Any]) -> list[SearchResult]:
         self._load_faiss()
-        long_answer = bool(re.search(r"\b(toàn bộ|đầy đủ|tất cả|chi tiết|trình bày)\b", question.lower()))
+        long_answer = bool(LONG_ANSWER_TERMS.search(question))
         retrieval_k = TOP_K_LONG_ANSWER if long_answer else TOP_K_RETRIEVAL
         semantic_docs = self._faiss.similarity_search(question, k=retrieval_k)
         results: list[SearchResult] = []
@@ -158,7 +161,7 @@ class QABot:
 
         if long_answer and results:
             # A section often spans adjacent chunks. Add neighbors so a request
-            # such as "trình bày toàn bộ câu 6" includes 6.1, 6.2, etc.
+            # such as "explain all of question 6" includes 6.1, 6.2, etc.
             by_index = {int(r.metadata.get("chunk_index", -1)): r for r in results}
             expanded = dict(by_index)
             for index in list(by_index):
@@ -182,16 +185,16 @@ class QABot:
     def answer(self, question: str) -> tuple[str, str]:
         cleaned_question, filters = extract_directives(question)
         if not cleaned_question:
-            return "Hãy nhập câu hỏi cụ thể.", ""
+            return "Please enter a specific question.", ""
         results = self.retrieve(cleaned_question, filters)
         if not results:
-            return "Không tìm thấy thông tin trong tài liệu.", ""
+            return "The document does not contain this information.", ""
 
         self._load_llm()
         prompt = build_prompt(cleaned_question, format_context(results), load_history(self.history_path))
         response = self._llm.invoke(prompt)
         answer = str(getattr(response, "content", response)).strip()
-        answer = answer.replace("Trả lời dựa trên CONTEXT:", "").strip()
+        answer = answer.replace("Answer based on CONTEXT:", "").strip()
         answer = append_missing_sections(answer, cleaned_question, results)
         citation = build_citation_string(results)
         save_turn(question, answer, self.history_path)
@@ -199,36 +202,36 @@ class QABot:
 
 
 def print_help() -> None:
-    print("Lệnh: /help, /clear (xóa lịch sử), /sources (xem index), /reload, exit")
+    print("Commands: /help, /clear (clear history), /sources (show index), /reload, exit")
 
 
 def run_repl() -> None:
-    print(f"QA Bot sẵn sàng | model Ollama: {OLLAMA_MODEL}")
-    print("Nhập câu hỏi tiếng Việt. Gõ /help để xem lệnh, exit để thoát.")
+    print(f"QA Bot ready | Ollama model: {OLLAMA_MODEL}")
+    print("Enter a question. Type /help to see commands or exit to quit.")
     bot = QABot()
 
     while True:
         try:
-            question = input("\nBạn > ").strip()
+            question = input("\nYou > ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\nTạm biệt!")
+            print("\nGoodbye!")
             break
         if question.lower() in {"exit", "quit", ":q"}:
-            print("Tạm biệt!")
+            print("Goodbye!")
             break
         if question == "/help":
             print_help()
             continue
         if question == "/clear":
             clear_history()
-            print("Đã xóa lịch sử hội thoại.")
+            print("Chat history cleared.")
             continue
         if question == "/sources":
-            print(f"Vector DB: {VECTOR_DB_PATH}\nLịch sử: {CHAT_HISTORY_PATH}")
+            print(f"Vector DB: {VECTOR_DB_PATH}\nHistory: {CHAT_HISTORY_PATH}")
             continue
         if question == "/reload":
             bot = QABot()
-            print("Đã nạp lại model và index ở lượt hỏi tiếp theo.")
+            print("The model and index will be reloaded on the next question.")
             continue
         if not question:
             continue
@@ -239,13 +242,13 @@ def run_repl() -> None:
             if citation:
                 print(citation)
         except Exception as error:
-            print(f"\nLỗi: {error}")
-            print("Kiểm tra setup.txt, Ollama (ollama serve) và index PDF.")
+            print(f"\nError: {error}")
+            print("Check setup.txt, Ollama (ollama serve), and the PDF index.")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Hỏi đáp tiếng Việt trên tài liệu PDF")
-    parser.add_argument("--question", "-q", help="Hỏi một câu rồi thoát")
+    parser = argparse.ArgumentParser(description="Ask questions about PDF documents")
+    parser.add_argument("--question", "-q", help="Ask one question and exit")
     args = parser.parse_args()
     if args.question:
         try:

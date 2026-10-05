@@ -2,8 +2,8 @@ import re
 
 def extract_directives(message: str):
     """
-    Tìm source:filename.pdf và page:3 trong câu hỏi.
-    Trả về (cleaned_query, filter_dict).
+    Find source:filename.pdf and page:3 directives in the question.
+    Return (cleaned_query, filter_dict).
     """
     filt = {}
     q    = message

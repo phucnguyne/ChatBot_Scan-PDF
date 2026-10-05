@@ -3,8 +3,8 @@ import os
 
 def enrich_metadata(chunks):
     """
-    Gán chunk_id, chuẩn hóa source basename cho mỗi chunk.
-    Cấu trúc metadata mục tiêu:
+    Assign a chunk_id and normalize the source basename for each chunk.
+    Target metadata structure:
     {
       "id":          "chunk_001",
       "source":      "AI.pdf",

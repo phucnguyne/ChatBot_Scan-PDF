@@ -14,12 +14,12 @@ def pull_model(model: str) -> None:
     print(f"Pulling Ollama model: {model} ...")
     result = subprocess.run(["ollama", "pull", model], capture_output=False)
     if result.returncode != 0:
-        print(f"❌ ollama pull thất bại. Hãy chạy thủ công: ollama pull {model}")
+        print(f"❌ ollama pull failed. Run this manually: ollama pull {model}")
     else:
-        print(f"✅ Model {model} sẵn sàng.")
+        print(f"✅ Model {model} is ready.")
 
 if __name__ == "__main__":
     if not check_ollama_running():
-        print("⚠️  Ollama chưa chạy. Khởi động bằng: ollama serve")
+        print("⚠️  Ollama is not running. Start it with: ollama serve")
         sys.exit(1)
     pull_model(OLLAMA_MODEL)

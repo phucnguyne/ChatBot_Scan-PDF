@@ -19,15 +19,15 @@ def download_file(url: str, dest: str) -> None:
         shutil.copyfileobj(r, f)
 
 if not os.path.exists(MODEL_PATH):
-    print(f"Đang tải embedding model (~46MB): {MODEL_FILE}")
+    print(f"Downloading embedding model (~46 MB): {MODEL_FILE}")
     try:
         download_file(MODEL_URL, MODEL_PATH)
-        print("✅ Tải xong!")
+        print("✅ Download complete!")
     except HTTPError as e:
-        print(f"❌ HTTP {e.code} — thử đặt biến EMBEDDING_MODEL_URL hoặc tải thủ công.")
+        print(f"❌ HTTP {e.code} — try setting EMBEDDING_MODEL_URL or downloading the model manually.")
         raise
     except URLError:
-        print("❌ Không kết nối được. Kiểm tra mạng hoặc đặt EMBEDDING_MODEL_URL.")
+        print("❌ Could not connect. Check your network or set EMBEDDING_MODEL_URL.")
         raise
 else:
-    print(f"✅ Embedding model đã có: {MODEL_PATH}")
+    print(f"✅ Embedding model is available: {MODEL_PATH}")

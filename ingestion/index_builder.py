@@ -10,9 +10,9 @@ from config import VECTOR_DB_PATH, BM25_INDEX_PATH, EMBEDDING_MODEL
 # ── Sentence-Transformers embedding wrapper ───────────────────────────────────
 class SentenceTransformerEmbedding(Embeddings):
     """
-    Sử dụng sentence-transformers trực tiếp — native, nhanh, ổn định.
-    Hỗ trợ cả HuggingFace model name (vd: 'all-MiniLM-L6-v2')
-    lẫn đường dẫn local (vd: './models/my-model').
+    Use sentence-transformers directly for native, fast, and stable embeddings.
+    Supports both Hugging Face model names (e.g. 'all-MiniLM-L6-v2')
+    and local paths (e.g. './models/my-model').
     """
     def __init__(self, model_name: str):
         from sentence_transformers import SentenceTransformer  # pyrefly: ignore[missing-import]
@@ -69,18 +69,18 @@ def save_bm25(index: dict, index_path: str = BM25_INDEX_PATH):
 
 def build_faiss(chunks, vector_db_path: str = VECTOR_DB_PATH):
     if not chunks:
-        raise ValueError("Không có chunk nào để build FAISS.")
+        raise ValueError("There are no chunks to build the FAISS index.")
 
-    print(f"🔧 Đang embed {len(chunks)} chunks với model: {EMBEDDING_MODEL}")
+    print(f"🔧 Embedding {len(chunks)} chunks with model: {EMBEDDING_MODEL}")
 
     emb = SentenceTransformerEmbedding(model_name=EMBEDDING_MODEL)
 
-    # Kiểm tra nhanh embed 1 chunk trước khi xử lý toàn bộ
+    # Test embedding one chunk before processing the full collection.
     test_vec = emb.embed_query(chunks[0].page_content[:200])
     if not test_vec:
         raise RuntimeError(
-            "Embedding trả về vector rỗng. "
-            "Kiểm tra lại model name hoặc thử model khác."
+            "The embedding model returned an empty vector. "
+            "Check the model name or try another model."
         )
     print(f"✅ Embedding OK — dim={len(test_vec)}")
 

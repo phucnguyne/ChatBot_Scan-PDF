@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**Trợ lý hỏi đáp PDF chạy local, hiểu tiếng Việt, tôn trọng tài liệu của bạn.**
+**A local PDF assistant that answers from your documents and keeps your files private.**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Ollama](https://img.shields.io/badge/LLM-Ollama-black?logo=ollama&logoColor=white)](https://ollama.com/)
@@ -10,178 +10,178 @@
 [![FAISS](https://img.shields.io/badge/Retrieval-FAISS-00A98F)](https://github.com/facebookresearch/faiss)
 [![BM25](https://img.shields.io/badge/Search-BM25-F59E0B)](https://en.wikipedia.org/wiki/Okapi_BM25)
 [![Local first](https://img.shields.io/badge/Privacy-local--first-2F6F54)](#privacy)
-[![Tests](https://img.shields.io/badge/Tests-3%20passing-2EA44F)](#kiểm-tra)
+[![Tests](https://img.shields.io/badge/Tests-3%20passing-2EA44F)](#tests)
 
 </div>
 
-Paperwise là ứng dụng hỏi đáp tài liệu PDF dành cho học tập, ôn thi và tra cứu nội bộ. Bạn import tài liệu, chọn phạm vi trang cần lập chỉ mục, build một lần rồi trò chuyện với nội dung đã chọn.
+Paperwise is a local PDF question-answering application for studying, exam preparation, and internal knowledge lookup. Import documents, choose which pages to index, build the index once, and then chat with the selected content.
 
-Không cần gửi PDF lên cloud. Sau khi tải model lần đầu, luồng hỏi đáp có thể chạy local qua Ollama.
+Your PDFs do not need to be uploaded to the cloud. After the models are downloaded, questions can be answered locally with Ollama.
 
-## Điểm nổi bật
+## Features
 
-- **Web UI local** tại `127.0.0.1:8000`, giao diện chat gọn như các sản phẩm AI hiện đại.
-- **Import PDF trực tiếp trên web**, không cần tự chép file vào thư mục dữ liệu.
-- **Build có kiểm soát**: chọn trang bắt đầu, số trang hoặc toàn bộ tài liệu.
-- **Theo dõi tiến độ** và ước tính thời gian build.
-- **Hybrid retrieval** kết hợp FAISS cho ngữ nghĩa và BM25 cho từ khóa.
-- **Citation theo file và trang** để kiểm tra câu trả lời.
-- **Long-answer mode** tự mở rộng context cho các yêu cầu như “trình bày toàn bộ câu 6”.
-- **Workspace riêng cho từng cuộc trò chuyện**: tài liệu, index và lịch sử không dùng chung.
-- **Quản lý dữ liệu**: xóa từng PDF, xóa toàn bộ tài liệu/index hoặc xóa lịch sử chat.
-- **OCR PDF scan** bằng PaddleOCR, xử lý từng trang để giảm đỉnh RAM.
-- **REPL CLI** cho trường hợp muốn hỏi trực tiếp từ terminal.
+- **Local web UI** at `127.0.0.1:8000`, with a streamlined chat interface.
+- **PDF import from the browser**, without manually copying files into a data folder.
+- **Scoped indexing** by start page and page count, or across the entire document.
+- **Build progress and time estimates** while documents are being indexed.
+- **Hybrid retrieval** combining FAISS semantic search with BM25 keyword search.
+- **File and page citations** to help verify answers.
+- **Long-answer mode** that expands context for requests such as “explain the entire question 6.”
+- **Separate workspace per conversation**: documents, indexes, and chat history are isolated.
+- **Data management**: delete individual PDFs, all documents and indexes, or the current chat history.
+- **Scanned-PDF OCR** with PaddleOCR, processing one page at a time to reduce peak memory usage.
+- **REPL CLI** for asking questions directly from a terminal.
 
 ## Demo workflow
 
 ```text
-Mở web → Import PDF → Chọn phạm vi trang → Build chỉ mục → Đặt câu hỏi
+Open the web UI → Import a PDF → Choose pages → Build the index → Ask a question
 ```
 
-> Lần build đầu có thể lâu vì OCR, embedding và tải model. Sau khi index xong, các câu hỏi tiếp theo không cần OCR lại.
+> The first build may take a while because it can run OCR, generate embeddings, and download models. Once indexing is complete, subsequent questions do not require OCR again.
 
-## Yêu cầu
+## Requirements
 
-- Windows 10/11 khuyến nghị.
-- Python 3.11+.
-- RAM tối thiểu 8 GB; 16 GB phù hợp hơn với PDF scan lớn.
-- Ollama chạy local.
-- Poppler nếu cần OCR PDF scan trên Windows.
-- Internet chỉ cần khi cài package và tải model lần đầu.
+- Windows 10/11 recommended.
+- Python 3.11 or later.
+- At least 8 GB RAM; 16 GB is recommended for large scanned PDFs.
+- Ollama running locally.
+- Poppler if OCR is needed for scanned PDFs on Windows.
+- Internet access is needed only to install packages and download models for the first time.
 
-## Cài đặt nhanh
+## Quick start
 
-### 1. Tạo và kích hoạt môi trường Python
+### 1. Create and activate a Python environment
 
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
-Nếu PowerShell chặn script trong phiên hiện tại:
+If PowerShell blocks script execution in the current session:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
 .\venv\Scripts\Activate.ps1
 ```
 
-### 2. Cài dependency
+### 2. Install dependencies
 
 ```powershell
 python -m pip install -r setup.txt
 ```
 
-### 3. Cài và chuẩn bị Ollama
+### 3. Install and prepare Ollama
 
-Cài Ollama từ [ollama.com/download/windows](https://ollama.com/download/windows), sau đó mở Ollama hoặc chạy:
+Install Ollama from [ollama.com/download/windows](https://ollama.com/download/windows), then open Ollama or run:
 
 ```powershell
 ollama serve
 ollama pull qwen2.5:3b
 ```
 
-Kiểm tra model:
+Check that the model is available:
 
 ```powershell
 ollama list
 ```
 
-Model mặc định được cấu hình trong [config.py](config.py). Có thể đổi model mà không sửa code:
+The default model is configured in [config.py](config.py). You can choose a different model without editing the code:
 
 ```powershell
 $env:OLLAMA_MODEL="qwen2.5:7b"
 ```
 
-## Chạy Paperwise
+## Run Paperwise
 
 ```powershell
 .\venv\Scripts\Activate.ps1
 python app.py
 ```
 
-Mở trình duyệt tại:
+Open this address in your browser:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-Giữ terminal đang chạy server mở trong lúc sử dụng.
+Keep the server terminal open while using the application.
 
-## Sử dụng web UI
+## Use the web UI
 
-1. Bấm **Cuộc trò chuyện mới** để tạo workspace sạch.
-2. Bấm **Import PDF** để thêm một hoặc nhiều PDF.
-3. Chọn **Từ trang** và **Số trang**, hoặc bật **Build toàn bộ tài liệu**.
-4. Bấm **Build chỉ mục**.
-5. Chờ trạng thái hoàn tất rồi mới đặt câu hỏi.
-6. Chọn chat cũ trong sidebar để xem lại lịch sử.
-7. Xóa từng file bằng nút `×`, hoặc dùng **Xóa toàn bộ tài liệu** để xóa PDF và index của chat hiện tại.
+1. Select **New chat** to create a clean workspace.
+2. Select **Import PDF** to add one or more PDFs.
+3. Set the **Start page** and **Page count**, or select **Index the entire document**.
+4. Select **Build index**.
+5. Wait for the build to finish before asking questions.
+6. Select an existing chat in the sidebar to revisit its history.
+7. Delete an individual file with the `×` button, or select **Delete all documents** to remove the current chat's PDFs and index.
 
-Mỗi cuộc trò chuyện có workspace riêng:
+Each conversation has its own workspace:
 
 ```text
 workspaces/<chat_id>/
-├── documents/                 # PDF của chat này
-├── vectorstores/db_faiss/    # FAISS, BM25 và manifest
-└── history.jsonl              # lịch sử chat của chat này
+├── documents/                 # PDFs for this chat
+├── vectorstores/db_faiss/     # FAISS, BM25, and manifest
+└── history.jsonl              # Chat history for this chat
 ```
 
-## Chạy CLI
+## Run the CLI
 
-REPL tiếng Việt:
+Start the interactive REPL:
 
 ```powershell
 python qabot.py
 ```
 
-Hỏi một câu rồi thoát:
+Ask one question and exit:
 
 ```powershell
-python qabot.py --question "Trình bày toàn bộ câu 6"
+python qabot.py --question "Explain all parts of question 6"
 ```
 
-Trong REPL:
+Available REPL commands:
 
 ```text
-/help       Xem lệnh
-/clear      Xóa lịch sử chat hiện tại
-/sources    Xem vị trí index và history
-/reload     Nạp lại bot
-exit        Thoát
+/help       Show available commands
+/clear      Clear the current chat history
+/sources    Show the index and history paths
+/reload     Reload the bot
+exit        Exit
 ```
 
-## Build bằng terminal
+## Build from the terminal
 
-Build 10 trang đầu để kiểm tra nhanh:
+Build the first 10 pages as a quick check:
 
 ```powershell
 python build_index.py --start-page 1 --page-count 10
 ```
 
-Build từ trang 11 thêm 20 trang:
+Build 20 pages starting at page 11:
 
 ```powershell
 python build_index.py --start-page 11 --page-count 20
 ```
 
-Build toàn bộ:
+Build the entire document:
 
 ```powershell
 python build_index.py --start-page 1 --page-count 0
 ```
 
-Ngôn ngữ OCR mặc định là English. Đổi sang tiếng Việt nếu tài liệu phù hợp:
+The default OCR language is English. Change it to Vietnamese when appropriate for the document:
 
 ```powershell
 python build_index.py --start-page 1 --page-count 10 --ocr-lang vi
 ```
 
-## Kiến trúc ngắn gọn
+## Architecture overview
 
 ```mermaid
 flowchart LR
     U[Web UI / CLI] --> API[Local web server]
-    API --> W[Workspace riêng từng chat]
+    API --> W[Workspace per chat]
     W --> PDF[PDF documents]
     PDF --> OCR[PyPDF / PaddleOCR]
     OCR --> C[Chunking + metadata]
@@ -193,41 +193,41 @@ flowchart LR
     O --> A[Answer + citation]
 ```
 
-### Thành phần chính
+### Main components
 
-| Thành phần | Vai trò |
+| Component | Responsibility |
 |---|---|
-| `app.py` | Entry point chạy web UI local |
-| `web_server.py` | API upload, chat, build, history và workspace |
-| `ui/` | HTML, CSS và JavaScript của giao diện |
-| `build_index.py` | Build FAISS/BM25 theo phạm vi trang |
-| `ingestion/` | Load PDF, OCR, chunking, metadata và index |
-| `qabot.py` | Retrieval, prompt grounding và Ollama answer |
-| `workspaces/` | Dữ liệu tách riêng theo từng chat |
-| `prepare_model/` | Chuẩn bị embedding và Ollama model |
+| `app.py` | Entry point for the local web UI |
+| `web_server.py` | Upload, chat, build, history, and workspace API |
+| `ui/` | HTML, CSS, and JavaScript for the interface |
+| `build_index.py` | Build FAISS/BM25 indexes for a selected page range |
+| `ingestion/` | PDF loading, OCR, chunking, metadata, and indexing |
+| `qabot.py` | Retrieval, grounded prompts, and Ollama answers |
+| `workspaces/` | Data isolated by conversation |
+| `prepare_model/` | Prepare embedding and Ollama models |
 
 ## Privacy
 
-- PDF import được lưu local trong workspace.
-- Câu hỏi được gửi tới Ollama local, không phải API cloud.
-- Không commit dữ liệu người dùng: `documents/`, `workspaces/`, `vectorstores/` và model được ignore bởi Git.
-- Lần tải model/package đầu tiên cần internet; sau đó có thể chạy offline tùy môi trường.
+- Imported PDFs are stored locally in each workspace.
+- Questions are sent to local Ollama, not a cloud API.
+- User data is not committed: `documents/`, `workspaces/`, `vectorstores/`, and model files are ignored by Git.
+- The first model/package download requires internet access; offline use may be possible afterward, depending on the environment.
 
-## Kiểm tra
+## Tests
 
-Chạy test:
+Run the tests:
 
 ```powershell
 .\venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-Kết quả hiện tại:
+Expected result:
 
 ```text
 Ran 3 tests ... OK
 ```
 
-Kiểm tra syntax:
+Check Python syntax:
 
 ```powershell
 .\venv\Scripts\python.exe -m py_compile app.py web_server.py build_index.py qabot.py
@@ -235,9 +235,9 @@ Kiểm tra syntax:
 
 ## Troubleshooting
 
-### Port 8000 đã được sử dụng
+### Port 8000 is already in use
 
-Dừng server Python cũ rồi chạy lại bằng `venv`:
+Stop the old Python server process and restart the application in the virtual environment:
 
 ```powershell
 Get-CimInstance Win32_Process |
@@ -248,41 +248,41 @@ Get-CimInstance Win32_Process |
 python app.py
 ```
 
-### Chat không mở khóa sau khi import
+### Chat remains locked after importing a PDF
 
-Bạn cần bấm **Build chỉ mục** và chờ trạng thái hoàn tất. Import file chỉ lưu PDF, chưa tạo index.
+Select **Build index** and wait for the build to finish. Importing a file stores the PDF but does not create an index.
 
-### Trả lời thiếu mục trong câu hỏi dài
+### Answers omit sections from a long question
 
-Dùng các từ khóa như `trình bày toàn bộ`, `liệt kê đầy đủ` hoặc `chi tiết`. Paperwise sẽ mở rộng context sang các chunks liền kề. Model `qwen2.5:3b` cho câu trả lời dài tốt hơn `qwen2.5:1.5b` nhưng cần nhiều RAM hơn.
+Use phrases such as `explain the entire section`, `list all parts`, or `give a detailed answer`. Paperwise expands the context to include neighboring chunks. The `qwen2.5:3b` model generally handles long answers better than `qwen2.5:1.5b`, but requires more RAM.
 
-### Lỗi OCR hoặc MemoryError
+### OCR error or MemoryError
 
-Thử build ít trang trước:
+Try indexing fewer pages first:
 
 ```powershell
 python build_index.py --start-page 1 --page-count 1
 ```
 
-PDF scan lớn cần thời gian OCR. Không đóng server khi build đang chạy.
+OCR can take time on large scanned PDFs. Do not close the server while a build is in progress.
 
-### FAISS báo lỗi deserialize
+### FAISS reports a deserialization error
 
-Ứng dụng đã dùng chế độ local index:
+The application loads its local index with:
 
 ```python
 FAISS.load_local(path, embedding, allow_dangerous_deserialization=True)
 ```
 
-Chỉ load các index do chính ứng dụng tạo trong workspace local.
+Only load indexes created by the application in the local workspace.
 
-## Gợi ý commit
+## Suggested commit messages
 
 ```text
 feat: build local PDF chat workspaces with import and scoped indexing
 ```
 
-Hoặc ngắn hơn:
+Or, more briefly:
 
 ```text
 feat: add local Paperwise PDF chat UI
@@ -290,5 +290,4 @@ feat: add local Paperwise PDF chat UI
 
 ## License
 
-Phát hành theo [MIT License](LICENSE). Bạn có thể sử dụng, sao chép, chỉnh sửa
-và phân phối project theo các điều khoản trong file license.
+Distributed under the [MIT License](LICENSE). You may use, copy, modify, and distribute the project under the terms of the license.

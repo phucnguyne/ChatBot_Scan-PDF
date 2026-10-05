@@ -46,7 +46,7 @@ def save_registry(data: dict) -> None:
     REGISTRY_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def create_chat(title: str = "Cuộc trò chuyện mới") -> str:
+def create_chat(title: str = "New chat") -> str:
     chat_id = uuid.uuid4().hex[:12]
     paths = paths_for(chat_id)
     paths["documents"].mkdir(parents=True, exist_ok=True)
@@ -88,22 +88,22 @@ class AppState:
 
     def switch(self, chat_id: str) -> None:
         if chat_id not in registry():
-            raise ValueError("Không tìm thấy cuộc trò chuyện.")
+            raise ValueError("Chat not found.")
         self.chat_id = chat_id
         self.build = {"running": False, "ready": False, "phase": "idle", "progress": 0, "message": ""}
         self.refresh()
 
     def answer(self, question: str) -> tuple[str, str]:
         if self.build["running"] or not self.build["ready"] or self.bot is None:
-            raise RuntimeError("Index của cuộc trò chuyện chưa sẵn sàng. Hãy import và build tài liệu.")
+            raise RuntimeError("This chat's index is not ready. Import and index a document first.")
         with self.lock:
             return self.bot.answer(question)
 
     def start_build(self, start_page: int, page_count: int) -> None:
         with self.build_lock:
             if self.build["running"]:
-                raise RuntimeError("Đang có một tiến trình build.")
-            self.build.update(running=True, ready=False, phase="starting", progress=0, message="Đang chuẩn bị...")
+                raise RuntimeError("An indexing process is already running.")
+            self.build.update(running=True, ready=False, phase="starting", progress=0, message="Preparing...")
         threading.Thread(target=self._build_worker, args=(start_page, page_count), daemon=True).start()
 
     def _build_worker(self, start_page: int, page_count: int) -> None:
@@ -121,7 +121,7 @@ class AppState:
                                  manifest_path=str(paths["manifest"]))
             elapsed = int(time.monotonic() - started)
             self.build.update(running=False, ready=True, phase="done", progress=100,
-                              message=f"Hoàn tất trong {elapsed}s", result=result)
+                              message=f"Completed in {elapsed}s", result=result)
             self.bot = QABot(str(paths["vector"]), str(paths["bm25"]), str(paths["history"]))
         except Exception as error:
             self.build.update(running=False, ready=False, phase="error", progress=0, message=str(error))
@@ -143,7 +143,7 @@ def status_payload() -> dict:
     paths = STATE.paths
     documents = sorted(paths["documents"].glob("*.pdf")) if paths["documents"].exists() else []
     chats = registry()
-    return {"chat_id": STATE.chat_id, "title": chats.get(STATE.chat_id, {}).get("title", "Cuộc trò chuyện"),
+    return {"chat_id": STATE.chat_id, "title": chats.get(STATE.chat_id, {}).get("title", "Chat"),
             "ready": STATE.build["ready"] and matching_index(paths) and not STATE.build["running"],
             "build": dict(STATE.build), "pdf_count": len(documents), "pdfs":[p.name for p in documents],
             "model": OLLAMA_MODEL, "history_count": len(load_history(str(paths["history"]))) }
@@ -173,20 +173,20 @@ class Handler(BaseHTTPRequestHandler):
             item = form["file"] if "file" in form else None
             filename = Path(getattr(item, "filename", "")).name if item is not None else ""
             if not filename.lower().endswith(".pdf"):
-                respond(self, {"error":"Chỉ hỗ trợ file PDF."}, 400); return
+                respond(self, {"error":"Only PDF files are supported."}, 400); return
             destination = STATE.paths["documents"] / filename
             destination.parent.mkdir(parents=True, exist_ok=True)
             with destination.open("wb") as output: output.write(item.file.read())
             data = registry()
-            if data.get(STATE.chat_id, {}).get("title") == "Cuộc trò chuyện mới":
+            if data.get(STATE.chat_id, {}).get("title") == "New chat":
                 data[STATE.chat_id]["title"] = filename
                 save_registry(data)
-            STATE.build.update(ready=False, phase="idle", progress=0, message="Đã thêm tài liệu; cần build lại.")
+            STATE.build.update(ready=False, phase="idle", progress=0, message="Document added; rebuild the index.")
             respond(self, {"ok":True, "filename":filename}); return
 
         length = int(self.headers.get("Content-Length", "0"))
         try: payload = json.loads(self.rfile.read(length) or b"{}")
-        except json.JSONDecodeError: respond(self, {"error":"Dữ liệu không hợp lệ."}, 400); return
+        except json.JSONDecodeError: respond(self, {"error":"Invalid data."}, 400); return
 
         try:
             if route == "/api/chat":
@@ -204,20 +204,20 @@ class Handler(BaseHTTPRequestHandler):
             if route == "/api/delete-document":
                 filename = Path(str(payload.get("filename", ""))).name
                 target = STATE.paths["documents"] / filename
-                if not target.exists(): respond(self, {"error":"Không tìm thấy tài liệu."}, 404); return
-                target.unlink(); STATE.build.update(ready=False, phase="idle", progress=0, message="Đã xóa tài liệu; cần build lại.")
+                if not target.exists(): respond(self, {"error":"Document not found."}, 404); return
+                target.unlink(); STATE.build.update(ready=False, phase="idle", progress=0, message="Document deleted; rebuild the index.")
                 respond(self, {"ok":True}); return
             if route == "/api/clear-documents":
                 paths = STATE.paths
                 for document in paths["documents"].glob("*.pdf"):
                     document.unlink()
                 shutil.rmtree(paths["vector"], ignore_errors=True)
-                STATE.build.update(ready=False, phase="idle", progress=0, message="Đã xóa toàn bộ tài liệu và index.")
+                STATE.build.update(ready=False, phase="idle", progress=0, message="All documents and the index have been deleted.")
                 STATE.bot = QABot(str(paths["vector"]), str(paths["bm25"]), str(paths["history"]))
                 respond(self, {"ok":True}); return
             if route == "/api/delete-chat":
                 chat_id = str(payload.get("chat_id", ""))
-                if chat_id == STATE.chat_id: raise ValueError("Không thể xóa cuộc trò chuyện đang mở.")
+                if chat_id == STATE.chat_id: raise ValueError("Cannot delete the currently open chat.")
                 paths = paths_for(chat_id); shutil.rmtree(paths["root"], ignore_errors=True)
                 data = registry(); data.pop(chat_id, None); save_registry(data)
                 respond(self, {"ok":True}); return
@@ -235,9 +235,9 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 8000), Handler)
-    print("QA Bot web UI: http://127.0.0.1:8000")
+    print("Paperwise web UI: http://127.0.0.1:8000")
     try: server.serve_forever()
-    except KeyboardInterrupt: print("\nĐã dừng web UI.")
+    except KeyboardInterrupt: print("\nWeb UI stopped.")
     finally: server.server_close()
 
 

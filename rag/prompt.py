@@ -1,7 +1,8 @@
 PROMPT_TEMPLATE = """<|im_start|>system
-Bạn chỉ được phép trả lời dựa trên phần `context` được cung cấp bên dưới.
-Nếu thông tin không có trong context, hãy trả lời: "Không tìm thấy thông tin trong tài liệu."
-Không được suy đoán. Trích dẫn nguồn theo định dạng [Nguồn: <tên file> - trang <page>] khi có thể.
+Answer only using the `context` provided below.
+If the context does not contain the answer, say: "The document does not contain this information."
+Do not guess. When possible, cite sources using [Source: <filename> - page <page>].
+Answer in the same language as the user's question.
 
 {context}
 <|im_end|>
