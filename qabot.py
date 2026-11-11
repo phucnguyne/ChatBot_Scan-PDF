@@ -36,7 +36,9 @@ def format_context(results: list[SearchResult]) -> str:
     """Format retrieved chunks with source metadata for the LLM."""
     sections = []
     for result in results:
-        source = os.path.basename(str(result.metadata.get("source", "unknown")))
+        source = os.path.basename(
+            str(result.metadata.get("source", "unknown")).replace("\\", "/")
+        )
         page = result.metadata.get("page")
         location = f"{source} - page {page}" if page is not None else source
         sections.append(f"[Source: {location}]\n{result.content.strip()}")
@@ -108,7 +110,7 @@ class QABot:
     def _matches_filter(metadata: dict[str, Any], filters: dict[str, Any]) -> bool:
         if not filters:
             return True
-        source = os.path.basename(str(metadata.get("source", "")))
+        source = os.path.basename(str(metadata.get("source", "")).replace("\\", "/"))
         if "source" in filters and source.lower() != str(filters["source"]).lower():
             return False
         return "page" not in filters or metadata.get("page") == filters["page"]

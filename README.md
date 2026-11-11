@@ -96,7 +96,7 @@ $env:OLLAMA_MODEL="qwen2.5:7b"
 
 ### Ubuntu
 
-The Ubuntu dependency set is still being checked. **Do not install `setup.txt` yet**: `requirements.txt` still needs dependency changes, including CPU-only PyTorch and a compatible PaddlePaddle version. It also includes packages that may not be needed. The install command will be added after this set is confirmed and tested on Ubuntu.
+Ubuntu dependencies are listed in the pinned [requirements.txt](requirements.txt). For a fresh environment, install and check them from the project directory:
 
 #### 1. Create and activate a Python environment
 
@@ -109,7 +109,16 @@ python --version
 python -m pip --version
 ```
 
-#### 2. Install and prepare Ollama
+#### 2. Install dependencies
+
+```bash
+python -m pip install -r requirements.txt
+python -m pip check
+```
+
+The current environment uses CPU-only PyTorch, but `requirements.txt` does not explicitly pin the PyTorch CPU wheel. Verify the installed build with `python -c "import torch; print(torch.__version__, torch.version.cuda)"` if CPU-only operation is required.
+
+#### 3. Install and prepare Ollama
 
 Install Ollama from [ollama.com/download/linux](https://ollama.com/download/linux), then check it:
 

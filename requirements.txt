@@ -1,26 +1,23 @@
-# Core
-gradio>=6.0
-langchain>=1.3
-langchain-community>=0.4
-langchain-core>=1.4
-langchain-text-splitters>=1.1
-langchain-ollama>=1.1
-ollama>=0.6
 
-# Vector DB & retrieval
-faiss-cpu>=1.14
-rank-bm25>=0.2
-sentence-transformers>=5.5
+# ==========================================
+# ChatBot Scan PDF - Ubuntu CPU-only
+# Python 3.12
+# ==========================================
 
-# Embeddings
-gpt4all>=2.8
+# LangChain
+langchain-community==0.4.2
+langchain-core==1.8.0
+langchain-text-splitters==1.1.3
+langchain-ollama==1.1.0
 
-# PDF processing
-pypdf>=6.0
-pdf2image>=1.17
-paddleocr>=3.6
-paddlepaddle>=3.3
+# Vector Database & Embeddings
+faiss-cpu==1.16.0
+sentence-transformers==6.3.0
 
-# Utilities
-python-dotenv>=1.0
-Pillow>=12.0
+# PDF Processing
+pypdf==7.0.1
+pdf2image==1.17.0
+
+# OCR - CPU only
+paddleocr==3.7.0
+paddlepaddle==3.2.0
