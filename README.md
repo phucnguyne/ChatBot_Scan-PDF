@@ -4,7 +4,7 @@
 
 **A local PDF assistant that answers from your documents and keeps your files private.**
 
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Ollama](https://img.shields.io/badge/LLM-Ollama-black?logo=ollama&logoColor=white)](https://ollama.com/)
 [![Model](https://img.shields.io/badge/Default%20model-qwen2.5--3b-7C3AED)](https://ollama.com/library/qwen2.5)
 [![FAISS](https://img.shields.io/badge/Retrieval-FAISS-00A98F)](https://github.com/facebookresearch/faiss)
@@ -42,14 +42,16 @@ Open the web UI → Import a PDF → Choose pages → Build the index → Ask a 
 
 ## Requirements
 
-- Windows 10/11 recommended.
-- Python 3.11 or later.
+- Windows 10/11 or Ubuntu.
+- Python 3.12. `web_server.py` uses the standard-library `cgi` module, which was removed in Python 3.13.
 - At least 8 GB RAM; 16 GB is recommended for large scanned PDFs.
 - Ollama running locally.
 - Poppler if OCR is needed for scanned PDFs on Windows.
 - Internet access is needed only to install packages and download models for the first time.
 
 ## Quick start
+
+### Windows (PowerShell)
 
 ### 1. Create and activate a Python environment
 
@@ -92,6 +94,48 @@ The default model is configured in [config.py](config.py). You can choose a diff
 $env:OLLAMA_MODEL="qwen2.5:7b"
 ```
 
+### Ubuntu
+
+The Ubuntu dependency set is still being checked. **Do not install `setup.txt` yet**: `requirements.txt` still needs dependency changes, including CPU-only PyTorch and a compatible PaddlePaddle version. It also includes packages that may not be needed. The install command will be added after this set is confirmed and tested on Ubuntu.
+
+#### 1. Create and activate a Python environment
+
+```bash
+cd /data/projects/ChatBot_Scan-PDF
+python3.12 -m venv .venv
+source .venv/bin/activate
+
+python --version
+python -m pip --version
+```
+
+#### 2. Install and prepare Ollama
+
+Install Ollama from [ollama.com/download/linux](https://ollama.com/download/linux), then check it:
+
+```bash
+ollama --version
+```
+
+If Ollama is not already running as a service, start it in a separate terminal:
+
+```bash
+ollama serve
+```
+
+In another terminal, pull the recommended model and confirm it is available:
+
+```bash
+ollama pull qwen2.5:3b
+ollama list
+```
+
+On a machine with 8 GB RAM, start with `qwen2.5:3b` rather than the larger 7B model. To choose another model for the current shell:
+
+```bash
+export OLLAMA_MODEL="qwen2.5:7b"
+```
+
 ## Run Paperwise
 
 ```powershell
@@ -106,6 +150,15 @@ http://127.0.0.1:8000
 ```
 
 Keep the server terminal open while using the application.
+
+On Ubuntu, activate the environment and start the web app with:
+
+```bash
+source .venv/bin/activate
+python app.py
+```
+
+Open `http://127.0.0.1:8000` in your browser. If it is not already cached, the first FAISS index build downloads the `all-MiniLM-L6-v2` embedding model through `sentence-transformers`. This model is separate from the Ollama chat model and requires an internet connection for that initial download.
 
 ## Use the web UI
 
